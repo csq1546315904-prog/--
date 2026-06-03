@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($bytes = [System.IO.File]::ReadAllBytes\\('d:\\\\弋朋\\\\海天_FunctionBlock\\\\Readme.md'\\); $text = [System.Text.Encoding]::GetEncoding\\('iso-8859-1'\\).GetString\\($bytes\\); [System.IO.File]::WriteAllText\\('d:\\\\弋朋\\\\海天_FunctionBlock\\\\Readme.md', $text, [System.Text.Encoding]::UTF8\\))",
+      "PowerShell(winget install --id Git.Git -e --source winget 2>&1)"
+    ]
+  }
+}
