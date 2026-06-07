@@ -183,7 +183,83 @@ IF DrvAlarmCode = 35 THEN AlarmBits[1] := TRUE; END_IF
 - **`AT %MW1400`**：同理，把数组"贴"到 Modbus 保持寄存器区。HMI 读 `%MW1400` 就是读 `HmiAlarm[0]`，PLC 这边改了数组值，HMI 刷新时自动看到。
 - **为什么用两个 VAR 块？**：IEC 61131-3 允许一个 POU 里写多个 VAR 块。第一个放"每周期会变的运行时变量"，第二个放"固定不变的配置表"。打开文件时配置数据位置固定、不会淹没在业务变量里。
 
-## 2. 文件索引
+### `prModusTcp_Fanuc`
+
+文件：`prModusTcp_Fanuc.st`
+
+与 Fanuc 机器人控制器的 Modbus TCP 通信 POU，负责 TCP 连接管理、寄存器读写，并集成高度→角度转换和呼吸灯功能。
+
+核心思路：
+1. 通过 `Modbus_TCP_Set_0` 管理 TCP 连接状态。
+2. 通过 `Modbus_TCP_Read_0` 读取 Fanuc 寄存器数据到 `rdata[0..9]`。
+3. 通过 `Modbus_TCP_Write_0` 将 `wdata[0..9]` 写入 Fanuc 寄存器。
+4. 6 个 `FB_HeightToAngle` 实例分别对应 iPTE/iPOP/iPUP/iReady/iPSP1/iPSP2 工位，将 Fanuc 发来的高度值转换为旋转角度。
+5. `FB_BLINK_Idle` 用于空闲状态呼吸灯指示。
+
+主要输入输出：
+| 信号 | 类型 | 说明 |
+| --- | --- | --- |
+| `ipFanuc` | ARRAY[0..3] OF BYTE | Fanuc 目标 IP，默认 172.16.10.11 |
+| `rdata` | ARRAY[0..9] OF WORD | 读取 Fanuc 寄存器缓存 |
+| `wdata` | ARRAY[0..9] OF WORD | 待写入 Fanuc 寄存器的数据 |
+| `bRead` / `bWrite` | BOOL | 读/写触发信号 |
+| `iReady_deg` | REAL | 换模位置 ready 信号角度 |
+
+> 注意：DEMO.export 中该 POU 仅有 VAR 声明块，ST 逻辑体需现场补充。
+
+## 2. 新手导读：两个通讯文件该怎么用？
+
+如果你刚接触 PLC 通讯，面对 `Modbus_Client_Fanuc` 和 `prModusTcp_Fanuc` 两个文件，按下面三步走：
+
+### 第一步：先搞清楚两个文件的区别
+
+| 对比维度 | Modbus_Client_Fanuc | prModusTcp_Fanuc |
+| --- | --- | --- |
+| 数据方向 | **只读**（Fanuc → PLC） | **读写双向**（Fanuc ↔ PLC） |
+| 核心功能 | 建立连接 + 周期读取寄存器 | 建立连接 + 读取 + 写入 + 数据加工 |
+| 附带功能 | 无 | 6 个高度→角度转换 + 呼吸灯 |
+| 代码完整度 | 有伪代码骨架，可直接补全 | 仅 VAR 声明，需从零写 ST 逻辑 |
+| 适合谁 | 新手入门、只需监视数据 | 需要双向控制、做运动学转换 |
+| 学习建议 | **先看这个**，搞懂再碰另一个 | 看懂第一个后再来，你会发现只是多了"写" |
+
+### 第二步：搞清楚 Modbus TCP 通讯的通用流程
+
+不管哪个文件，Modbus TCP 通讯就是三步循环：
+
+```
+① 建立 TCP 连接 ──→ ② 发请求/收数据 ──→ ③ 等一段时间再发下一次
+     ↑                                        │
+     └──────────── 断了就重连 ←────────────────┘
+```
+
+| 步骤 | 用的功能块 | 只做一次还是反复做 |
+| --- | --- | --- |
+| 建立连接 | `Modbus_TCP_Set` | 连上之后就不用再调了（除非断线） |
+| 读取数据 | `Modbus_TCP_Read` | **周期调用**，比如每 100ms 一次 |
+| 写入数据 | `Modbus_TCP_Write` | 需要写的时候才调用，不要一直写 |
+| 节拍控制 | `TON` 定时器 | 限制请求频率，防止网络拥塞 |
+
+### 第三步：拿到文件后你要做的事
+
+1. **改 IP 地址** — 把 `ip`/`ipFanuc` 改成你实际 Fanuc 的 IP
+2. **确认寄存器地址** — 问 Fanuc 那边的人：寄存器从几号开始？要读几个？
+3. **补全 ST 逻辑** — 两个文件的程序体现在都还是注释/伪代码状态，需要你参照伪代码写出真正的 ST 程序
+4. **在 Task 中调用** — 把 POU 拖到周期任务里（比如 10ms 周期），PLC 才会执行它
+5. **编译 + 在线看数据** — 编译通过后下载到 PLC，在线监控 `rdata[]` 看数据有没有进来
+
+### 核心概念速查
+
+| 概念 | 大白话解释 |
+| --- | --- |
+| Modbus TCP | 通过网线读写对方寄存器的一种工业协议，几乎所有机器人都支持 |
+| 寄存器 | 可以理解成 Fanuc 内存里的"小格子"，每个格子存一个 16 位整数（WORD） |
+| Socket | TCP 连接的"门牌号"，连上后拿到这个号，后续读写都要用它 |
+| `rdata` / `wdata` | 读缓存 / 写缓存，读回来的值放 rdata，要写出去的值先填进 wdata |
+| TON 定时器 | 一个倒计时器，到时间自动把输出置 TRUE，用来控制"多久读一次" |
+
+> 看完还是不确定用哪个？**先选 Modbus_Client_Fanuc 试试**。它是纯读的，不会改 Fanuc 的数据，出不了大事。等读通了再考虑用 prModusTcp_Fanuc 加写功能。
+
+## 3. 文件索引
 
 | 文件 | 说明 |
 | --- | --- |
@@ -194,5 +270,6 @@ IF DrvAlarmCode = 35 THEN AlarmBits[1] := TRUE; END_IF
 | `Modbus_Client_Fanuc.st` | Modbus TCP 客户端 — Fanuc 寄存器读取 |
 | `prHMI.st` | HMI 数据接口 — 变量声明与地址映射 |
 | `prHMI_Error.st` | 报警处理程序 — 查表法映射驱动器报警码到 HMI |
+| `prModusTcp_Fanuc.st` | Modbus TCP 通信 — Fanuc 寄存器读写与高度角度转换 |
 | `Readme.md` | 本文档 |
 | `ChangeLog_ST.md` | ST 程序块 AI 修改记录 |

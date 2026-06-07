@@ -17,6 +17,26 @@
 
 ## 修改记录
 
+### 2026-06-04
+
+| 字段 | 内容 |
+| --- | --- |
+| 修改人 | Codex |
+| 关联文件 | `海天_FunctionBlock/Modbus_Client_Fanuc.st`、`海天_FunctionBlock/prModusTcp_Fanuc.st`、`海天_FunctionBlock/Read Me.md` |
+| 修改目的 | 为新手增强两个通讯文件的代码注释和文档说明 |
+| 主要变更 | `Modbus_Client_Fanuc.st` 新增"新手快速上手"章节（五步指南、变量依赖链图解、与 prModusTcp_Fanuc 对比表）；`prModusTcp_Fanuc.st` 新增"新手快速上手"章节（五组变量分层图解、选型指南、ST 补充指引）；`Read Me.md` 新增"新手导读：两个通讯文件该怎么用？"章节（三步上手、通用流程、核心概念速查） |
+| 验证结果 | 文本核对通过 |
+| 备注 | 无逻辑改动，仅补充注释和文档 |
+
+| 字段 | 内容 |
+| --- | --- |
+| 修改人 | Codex |
+| 关联文件 | `海天_FunctionBlock/prModusTcp_Fanuc.st` |
+| 修改目的 | 从 DEMO.export 摘抄 prModusTcp_Fanuc Modbus TCP 通信 POU |
+| 主要变更 | 新建 `prModusTcp_Fanuc.st`，包含 Fanuc Modbus TCP 变量声明（读/写功能块、IP 配置、高度→角度转换实例、呼吸灯实例） |
+| 验证结果 | 文本核对通过；未在 IndraWorks 中编译 |
+| 备注 | DEMO.export 中仅有 VAR 声明块无逻辑体，需现场补充 ST 逻辑 |
+
 ### 2026-06-03
 
 | 字段 | 内容 |
