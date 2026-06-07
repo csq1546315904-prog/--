@@ -100,3 +100,4 @@ IF DrvAlarmCode <> 0 THEN
 ELSE
     bDriveError := FALSE;
 END_IF
+....
